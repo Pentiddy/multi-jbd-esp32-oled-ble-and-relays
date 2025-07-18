@@ -1,4 +1,5 @@
-# multi-jbd-esp32-oled-ble-and-relays
+# multi-jbd-esp32-oled-ble-and-relays-esphome-yaml
+
 JBD BMS multiple read via ble and display on Oled and Relay control of external appliances
 push button and menu
 
