@@ -19,3 +19,7 @@ D26 - Oled SDA
 D25 - Oled RES
 D33 - Oled DC
 D32 - Oled CS
+D5 - Relay1
+D18 - Relay2
+D15 - Relay3
+D4 - Relay4
