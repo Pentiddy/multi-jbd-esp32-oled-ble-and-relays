@@ -13,13 +13,24 @@ This code has been extroplated from other code and I thank all who have posted h
 Connections:
 
 ESP Pins
+
 D12 - switch
+
 D27 - Oled SCK
+
 D26 - Oled SDA
+
 D25 - Oled RES
+
 D33 - Oled DC
+
 D32 - Oled CS
+
 D5 - Relay1
+
 D18 - Relay2
+
 D15 - Relay3
+
 D4 - Relay4
+
