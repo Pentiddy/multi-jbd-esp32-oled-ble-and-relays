@@ -1,0 +1,630 @@
+substitutions:
+  name: bms
+  friendly_name: BMS
+  bms0: "${name} 0"
+  bms1: "${name} 1"
+  device_description: "Monitor and Control multiple JBD Battery Management Systems via BLE, with Oled display and button"
+  external_components_source: github://syssi/esphome-jbd-bms@main
+  bms0_mac_address: !secret bms0_mac_address
+  bms1_mac_address: !secret bms1_mac_address
+  arial_font_file: 'fonts/arial.ttf'
+ # bebas_font_file: 'fonts/BebasNeue.otf'
+  battery_font_file: 'fonts/materialdesignicons-webfont.ttf'
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: ${device_description}
+  min_version: 2024.6.0
+  build_path: .esphome/$name/
+  project:
+    name: "syssi.esphome-jbd-bms"
+    version: 2.0.1
+
+esp32:
+  board: wemos_d1_mini32
+  framework:
+    type: esp-idf
+
+
+external_components:
+  - source: ${external_components_source}
+    refresh: 0s
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    gateway: !secret wifi_gateway
+    subnet: !secret wifi_subnet
+    static_ip: !secret wifi_static_ip
+  ap:
+    ssid: ${friendly_name} Hotspot
+    password: !secret hotspot_password
+
+# Enable Web server
+web_server:
+  port: 80
+  local: True
+
+ota:
+  platform: esphome
+
+logger:
+  level: INFO
+  logs:
+    ble_client.client: WARN
+    ble_client: WARN
+    jbd_bms_ble: WARN
+
+spi:
+  clk_pin: GPIO27
+  mosi_pin: GPIO26
+
+font:
+  - file: ${arial_font_file}
+    id: font_arial_10
+    size: 10
+    extras:
+      - file: "fonts/materialdesignicons-webfont.ttf"
+        glyphs: [
+          "\U000F0130", # on
+          "\U000F012F", #off
+                ]
+
+  - file: ${arial_font_file}
+    id: font_arial_16
+    size: 16
+  - file: ${arial_font_file}
+    id: font_arial_22
+    size: 22
+  - file: ${battery_font_file}
+    id: battery_font
+    size: 22
+    glyphs: [
+
+      # Battery
+      '󰁺', # F007A mdi-battery-10
+      '󰁻', # F007B mdi-battery-20
+      '󰁼', # F007C mdi-battery-30
+      '󰁽', # F007D mdi-battery-40
+      '󰁾', # F007E mdi-battery-50
+      '󰁿', # F007F mdi-battery-60
+      '󰂀', # F0080 mdi-battery-70
+      '󰂁', # F0081 mdi-battery-80
+      '󰂂', # F0082 mdi-battery-90
+      '󰁹', # F0079 mdi-battery 100
+      ] 
+
+display:
+  - platform: ssd1306_spi
+    id: oled
+    model: "SSD1306 128x64"
+    cs_pin: GPIO32
+    dc_pin: GPIO33
+    reset_pin: GPIO25
+    pages:
+      - id: page1      
+        lambda: |-
+         it.printf(0, 48, id(font_arial_16), "%4.0f%%", id(soc).state);
+          if(id(soc).has_state()) {
+            if (id(soc).state >= 99) {
+              it.printf(50, 42, id(battery_font), "󰁹");
+            } else if (id(soc).state  >= 90) {
+              it.printf(50, 42, id(battery_font), "󰂂");
+            } else if (id(soc).state  >= 80) {
+              it.printf(50, 42, id(battery_font), "󰂁");
+            } else if (id(soc).state  >= 70) {
+              it.printf(50, 42, id(battery_font), "󰂀");
+            } else if (id(soc).state  >= 60) {
+              it.printf(50, 42, id(battery_font), "󰁿");
+            } else if (id(soc).state  >= 50) {
+              it.printf(50, 42, id(battery_font), "󰁾");
+            } else if (id(soc).state  >= 40) {
+              it.printf(50, 42, id(battery_font), "󰁽");
+            } else if (id(soc).state  >= 30) {
+              it.printf(50, 42, id(battery_font), "󰁼");
+            } else if (id(soc).state  >= 20) {
+              it.printf(50, 42, id(battery_font), "󰁻");
+            } else {
+              it.printf(50, 42, id(battery_font), "󰁺");
+            }
+          }
+         it.printf(it.get_width(), 5, id(font_arial_16), TextAlign::TOP_RIGHT, "%.2fA", id(amps).state); 
+         it.printf(it.get_width(), 25, id(font_arial_16), TextAlign::TOP_RIGHT, "%.2fW", id(watts).state);
+         it.printf(it.get_width(), 45, id(font_arial_16), TextAlign::TOP_RIGHT, "%.2fV", id(voltagesum).state);
+         it.printf(0,0, id(font_arial_10), "%s Pump", id(Pond).state ? "󰄯" : "󰄰");
+         it.printf(0,12, id(font_arial_10), "%s Inverer", id(Inverter).state ? "󰄯" : "󰄰");
+         it.printf(0,24, id(font_arial_10), "%s Fridge", id(Fridge).state ? "󰄯" : "󰄰");
+         it.printf(0,36, id(font_arial_10), "%s Relay 4", id(Spare).state ? "󰄯" : "󰄰");
+
+      - id: page2
+        lambda: |-   
+         it.printf(6, 5, id(font_arial_16), "BMS 0: %4.0f%%", id(state_of_charge).state);
+         it.printf(6, 25, id(font_arial_16), "%.2fA", id(current).state); 
+         it.printf(64, 25, id(font_arial_16), "%.2fW", id(power).state);
+         it.printf(it.get_width(), 45, id(font_arial_16), TextAlign::TOP_RIGHT, "%.2fV", id(total_voltage).state);
+
+      - id: page3
+        lambda: |-   
+         it.printf(6, 5, id(font_arial_16), "BMS 1: %4.0f%%", id(state_of_charge1).state);
+         it.printf(6, 25, id(font_arial_16), "%.2fA", id(current1).state); 
+         it.printf(64, 25, id(font_arial_16), "%.2fW", id(power1).state);
+         it.printf(6, 45, id(font_arial_16), "%.2fV", id(total_voltage1).state);
+
+      - id: page4
+        lambda: |-   
+         it.printf(6, 5, id(font_arial_16), "BOTH: %4.0f%%", id(soc).state);
+         it.printf(6, 25, id(font_arial_16), "%.2fA", id(amps).state); 
+         it.printf(64, 25, id(font_arial_16), "%.2fW", id(watts).state);
+         it.printf(6, 45, id(font_arial_16), "%.2fV", id(voltagesum).state);
+
+graphical_display_menu:
+  id: settings_menu
+  display: oled
+  on_redraw:
+    component.update: oled
+  active: false
+  mode: rotary
+  on_leave:
+    then:
+      display_menu.hide: settings_menu      
+  font: font_arial_16
+  items:
+    - type: switch
+      immediate_edit: true
+      text: Pond pump
+      switch: Pond
+      on_enter:
+        then:
+          switch.toggle: Pond
+
+    - type: switch
+      immediate_edit: true
+      text: Inverter
+      switch: Inverter
+      on_enter:
+        then:
+          switch.toggle: Inverter
+
+
+    - type: switch
+      immediate_edit: true
+      text: Fridge
+      switch: Fridge
+      on_enter:
+        then:
+          switch.toggle: Fridge
+
+    - type: switch
+      immediate_edit: true
+      text: Relay4
+      switch: Spare
+      on_enter:
+        then:
+          switch.toggle: Spare
+
+#    - type: custom
+ #     text: Exit
+  #    on_enter:
+   #     then:
+    #      display_menu.hide: settings_menu
+
+    - type: command
+      text: Exit
+      on_value:
+        then:
+          display_menu.hide: settings_menu
+      
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+
+ble_client:
+  - mac_address: ${bms0_mac_address}
+    id: client0
+  - mac_address: ${bms1_mac_address}
+    id: client1
+
+jbd_bms_ble:
+  - id: bms0
+    ble_client_id: client0
+    update_interval: 5s
+  - id: bms1
+    ble_client_id: client1
+    update_interval: 5s
+
+binary_sensor:
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms0
+    balancing:
+      name: "${bms0} balancing"
+    charging:
+      name: "${bms0} charging"
+    discharging:
+      name: "${bms0} discharging"
+    online_status:
+      name: "${bms0} online status"
+
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms1
+    balancing:
+      name: "${bms1} balancing"
+    charging:
+      name: "${bms1} charging"
+    discharging:
+      name: "${bms1} discharging"
+    online_status:
+      name: "${bms1} online status"
+
+  - platform: gpio
+    pin: GPIO12
+    id: pushbutton1
+    name: "Change display page"
+    on_multi_click:
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+      then:
+        - if:
+            condition:
+              display_menu.is_active: settings_menu
+            then: 
+              - display_menu.enter: settings_menu
+            else:
+              - display_menu.show_main: settings_menu         
+
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at least 0.5s
+      then:
+        - if:
+            condition:
+              display_menu.is_active: settings_menu
+            then:
+              - display_menu.down: settings_menu
+            else:
+              - display.page.show_next: oled
+
+sensor:
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms0
+    battery_strings:
+      name: "${bms0} battery strings"
+    current:
+      name: "${bms0} current"
+      id: current
+    power:
+      name: "${bms0} power"
+      id: power
+    charging_power:
+      name: "${bms0} charging power"
+    discharging_power:
+      name: "${bms0} discharging power"
+    state_of_charge:
+      name: "${bms0} state of charge"
+      id: state_of_charge
+    nominal_capacity:
+      name: "${bms0} nominal capacity"
+    charging_cycles:
+      name: "${bms0} charging cycles"
+    capacity_remaining:
+      name: "${bms0} capacity remaining"
+    battery_cycle_capacity:
+      name: "${bms0} battery cycle capacity"
+    total_voltage:
+      name: "${bms0} total voltage"
+      id: total_voltage
+    average_cell_voltage:
+      name: "${bms0} average cell voltage"
+    delta_cell_voltage:
+      name: "${bms0} delta cell voltage"
+      id: cell_voltage_delta
+      accuracy_decimals: 3
+    min_cell_voltage:
+      name: "${bms0} min cell voltage"
+    max_cell_voltage:
+      name: "${bms0} max cell voltage"
+    min_voltage_cell:
+      name: "${bms0} min voltage cell"
+    max_voltage_cell:
+      name: "${bms0} max voltage cell"
+    temperature_1:
+      name: "${bms0} temperature 1"
+      id: temperature_1
+      unit_of_measurement: "°C"
+    temperature_2:
+      name: "${bms0} temperature 2"
+      id: temperature_2
+    cell_voltage_1:
+      id: cell_voltage_1
+      name: "${bms0} cell voltage 1"
+    cell_voltage_2:
+      name: "${bms0} cell voltage 2"
+      id: cell_voltage_2
+    cell_voltage_3:
+      name: "${bms0} cell voltage 3"
+      id: cell_voltage_3
+    cell_voltage_4:
+      name: "${bms0} cell voltage 4"
+      id: cell_voltage_4
+    operation_status_bitmask:
+      name: "${bms0} operation status bitmask"
+    errors_bitmask:
+      name: "${bms0} errors bitmask"
+    balancer_status_bitmask:
+      name: "${bms0} balancer status bitmask"
+    software_version:
+      name: "${bms0} software version"
+    short_circuit_error_count:
+      name: "${bms0} short circuit error count"
+    charge_overcurrent_error_count:
+      name: "${bms0} charge overcurrent error count"
+    discharge_overcurrent_error_count:
+      name: "${bms0} discharge overcurrent error count"
+    cell_overvoltage_error_count:
+      name: "${bms0} cell overvoltage error count"
+    cell_undervoltage_error_count:
+      name: "${bms0} cell undervoltage error count"
+    charge_overtemperature_error_count:
+      name: "${bms0} charge overtemperature error count"
+    charge_undertemperature_error_count:
+      name: "${bms0} charge undertemperature error count"
+    discharge_overtemperature_error_count:
+      name: "${bms0} discharge overtemperature error count"
+    discharge_undertemperature_error_count:
+      name: "${bms0} discharge undertemperature error count"
+    battery_overvoltage_error_count:
+      name: "${bms0} battery overvoltage error count"
+    battery_undervoltage_error_count:
+      name: "${bms0} battery undervoltage error count"
+
+    # ...
+
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms1
+    battery_strings:
+      name: "${bms1} battery strings"
+    current:
+      name: "${bms1} current"
+      id: current1
+    power:
+      name: "${bms1} power"
+      id: power1
+    charging_power:
+      name: "${bms1} charging power"
+    discharging_power:
+      name: "${bms1} discharging power"
+    state_of_charge:
+      name: "${bms1} state of charge"
+      id: state_of_charge1
+    nominal_capacity:
+      name: "${bms1} nominal capacity"
+    charging_cycles:
+      name: "${bms1} charging cycles"
+    capacity_remaining:
+      name: "${bms1} capacity remaining"
+    battery_cycle_capacity:
+      name: "${bms1} battery cycle capacity"
+    total_voltage:
+      name: "${bms1} total voltage"
+      id: total_voltage1
+    average_cell_voltage:
+      name: "${bms1} average cell voltage"
+    delta_cell_voltage:
+      name: "${bms1} delta cell voltage"
+      id: cell_voltage_delta1
+      accuracy_decimals: 3
+    min_cell_voltage:
+      name: "${bms1} min cell voltage"
+    max_cell_voltage:
+      name: "${bms1} max cell voltage"
+    min_voltage_cell:
+      name: "${bms1} min voltage cell"
+    max_voltage_cell:
+      name: "${bms1} max voltage cell"
+    temperature_1:
+      name: "${bms1} temperature 1"
+      id: temperature_1_1
+      unit_of_measurement: "°C"
+    temperature_2:
+      name: "${bms1} temperature 2"
+      id: temperature_2_1
+    cell_voltage_1:
+      id: cell_voltage_1_1
+      name: "${bms1} cell voltage 1"
+    cell_voltage_2:
+      name: "${bms1} cell voltage 2"
+      id: cell_voltage_2_1
+    cell_voltage_3:
+      name: "${bms1} cell voltage 3"
+      id: cell_voltage_3_1
+    cell_voltage_4:
+      name: "${bms1} cell voltage 4"
+      id: cell_voltage_4_1
+    operation_status_bitmask:
+      name: "${bms1} operation status bitmask"
+    errors_bitmask:
+      name: "${bms1} errors bitmask"
+    balancer_status_bitmask:
+      name: "${bms1} balancer status bitmask"
+    software_version:
+      name: "${bms1} software version"
+    short_circuit_error_count:
+      name: "${bms1} short circuit error count"
+    charge_overcurrent_error_count:
+      name: "${bms1} charge overcurrent error count"
+    discharge_overcurrent_error_count:
+      name: "${bms1} discharge overcurrent error count"
+    cell_overvoltage_error_count:
+      name: "${bms1} cell overvoltage error count"
+    cell_undervoltage_error_count:
+      name: "${bms1} cell undervoltage error count"
+    charge_overtemperature_error_count:
+      name: "${bms1} charge overtemperature error count"
+    charge_undertemperature_error_count:
+      name: "${bms1} charge undertemperature error count"
+    discharge_overtemperature_error_count:
+      name: "${bms1} discharge overtemperature error count"
+    discharge_undertemperature_error_count:
+      name: "${bms1} discharge undertemperature error count"
+    battery_overvoltage_error_count:
+      name: "${bms1} battery overvoltage error count"
+    battery_undervoltage_error_count:
+      name: "${bms1} battery undervoltage error count"
+
+    # ...
+  
+  - platform: combination
+    type: mean
+    name: "Combined State of Charge"
+    id: soc
+    sources:
+      - source: state_of_charge
+      - source: state_of_charge1
+    on_value_range:
+      - above: 99.5
+        then:
+          - switch.turn_on: Pond
+          - switch.turn_on: Inverter
+          - switch.turn_on: Fridge
+      - below: 98
+        then:
+          - switch.turn_off: Pond
+          - switch.turn_off: Inverter
+      - below: 75
+        then:
+          - switch.turn_off: Fridge
+          
+
+  - platform: combination
+    type: sum
+    name: "Combined Power"
+    id: watts
+    sources:
+      - source: power
+      - source: power1
+
+  - platform: combination
+    type: sum
+    name: "Combined Current"
+    id: amps
+    sources:
+      - source: current
+      - source: current1
+
+  - platform: combination
+    type: mean
+    name: "Mean Combined Voltage"
+    id: voltagesum
+    sources:
+      - source: total_voltage
+      - source: total_voltage1
+
+
+text_sensor:
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms0
+    errors:
+      name: "${bms0} errors"
+    operation_status:
+      name: "${bms0} operation status"
+    device_model:
+      name: "${bms0} device model"
+
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms1
+    errors:
+      name: "${bms1} errors"
+    operation_status:
+      name: "${bms1} operation status"
+    device_model:
+      name: "${bms1} device model"
+
+select:
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms0
+    read_eeprom_register:
+      name: "${bms0} read eeprom register"
+      optionsmap:
+        0xAA: "Error Counts"
+
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms1
+    read_eeprom_register:
+      name: "${bms1} read eeprom register"
+      optionsmap:
+        0xAA: "Error Counts"
+
+output:
+  - platform: gpio
+    id: relay1
+    pin:
+      number: GPIO5
+      inverted: true
+  - platform: gpio
+    id: relay2
+    pin:
+      number: GPIO18
+      inverted: true
+
+  - platform: gpio
+    id: relay3
+    pin:
+      number: GPIO15
+      inverted: true
+
+  - platform: gpio
+    id: relay4
+    pin:
+      number: GPIO4
+      inverted: true
+
+  - platform: gpio
+    id: alarm1
+    pin:
+      number: GPIO14
+      inverted: false      
+
+switch:
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms0
+    charging:
+      name: "${bms0} charging"
+    discharging:
+      name: "${bms0} discharging"
+
+  - platform: jbd_bms_ble
+    jbd_bms_ble_id: bms1
+    charging:
+      name: "${bms1} charging"
+    discharging:
+      name: "${bms1} discharging"
+
+  - platform: output
+    name: Pond
+    id: Pond
+    output: relay1
+    restore_mode: ALWAYS_OFF
+
+  - platform: output
+    name: Inverter
+    id: Inverter
+    output: relay2
+    restore_mode: ALWAYS_OFF
+
+  - platform: output
+    name: Fridge
+    id: Fridge
+    output: relay3
+    restore_mode: ALWAYS_OFF
+      
+  - platform: output
+    name: Spare
+    id: Spare
+    output: relay4
+    restore_mode: ALWAYS_OFF
+
